@@ -59,6 +59,12 @@ namespace CodeChallenge.Controllers
             return Ok(newEmployee);
         }
 
+        /// <summary>
+        /// Retrieves the employee's reporting structure including
+        /// the count of all of their reports
+        /// </summary>
+        /// <param name="id"></param>
+        /// <returns></returns>
         [HttpGet("{id}/reporting-structure")]
         public async Task<IActionResult> GetReportingStructureForEmployee(string id)
         {
