@@ -1,0 +1,104 @@
+﻿using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Threading.Tasks;
+using CodeChallenge.Models;
+using Microsoft.Extensions.Logging;
+using CodeChallenge.Repositories;
+
+namespace CodeChallenge.Services
+{
+    public class EmployeeService : IEmployeeService
+    {
+        private readonly IEmployeeRepository _employeeRepository;
+        private readonly ILogger<EmployeeService> _logger;
+
+        public EmployeeService(ILogger<EmployeeService> logger, IEmployeeRepository employeeRepository)
+        {
+            _employeeRepository = employeeRepository;
+            _logger = logger;
+        }
+
+        public Employee Create(Employee employee)
+        {
+            if(employee != null)
+            {
+                _employeeRepository.Add(employee);
+                _employeeRepository.SaveAsync().Wait();
+            }
+
+            return employee;
+        }
+
+        public Employee GetById(string id)
+        {
+            if(!String.IsNullOrEmpty(id))
+            {
+                return _employeeRepository.GetById(id);
+            }
+
+            return null;
+        }
+
+        public Employee Replace(Employee originalEmployee, Employee newEmployee)
+        {
+            if(originalEmployee != null)
+            {
+                _employeeRepository.Remove(originalEmployee);
+                if (newEmployee != null)
+                {
+                    // ensure the original has been removed, otherwise EF will complain another entity w/ same id already exists
+                    _employeeRepository.SaveAsync().Wait();
+
+                    _employeeRepository.Add(newEmployee);
+                    // overwrite the new id with previous employee id
+                    newEmployee.EmployeeId = originalEmployee.EmployeeId;
+                }
+                _employeeRepository.SaveAsync().Wait();
+            }
+
+            return newEmployee;
+        }
+
+        public async Task<ReportingStructure> GetReportingStructureById(string employeeId)
+        {
+            if (string.IsNullOrWhiteSpace(employeeId))
+                throw new ArgumentException("Employee ID cannot be null or empty");
+
+            int? reportsCount = await GetReportsCount(employeeId);
+
+            if (reportsCount is null)
+                return null;
+
+            return new ReportingStructure
+            {
+                EmployeeId = employeeId,
+                NumberOfReports = reportsCount.Value 
+            };
+        }
+
+        private async Task<int?> GetReportsCount(string employeeId)
+        {
+            // Retrieve employee with reports
+            var employee = await _employeeRepository.GetEmployeeAndReports(employeeId);
+
+            if (employee is null)
+                return null;
+
+            int reportsCount = 0;
+
+            // Check if there are any reports
+            if (employee.DirectReports != null && employee.DirectReports.Count > 0)
+            {                
+                // Add direct reports then navigate reporting structure recursively
+                reportsCount += employee.DirectReports.Count;
+                foreach (var report in employee.DirectReports)
+                {
+                    reportsCount += (await GetReportsCount(report.EmployeeId)).Value;
+                }
+            }
+
+            return reportsCount;
+        }
+    }
+}
